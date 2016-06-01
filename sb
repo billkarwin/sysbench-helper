@@ -1,0 +1,36 @@
+#!/bin/bash
+
+: ${CSVDATA:="sysbench-data"}
+: ${SBRUNTIME:="60"}
+: ${SBDATABASE:="sysbench"}
+: ${SBLENGTH:="1000000000"}
+: ${SBTEST:="oltp"}
+: ${SBUSER:="root"}
+: ${SBPASSWORD:='Example@2016'}
+: ${SBTXRATE:=500}
+
+if [ ! -f $CSVDATA ] ; then
+        echo "Initializing database..."
+        mysqladmin -f drop sysbenchtest
+        mysqladmin create sysbenchtest
+        sysbench \
+        --test=/usr/share/doc/sysbench/tests/db/$SBTEST.lua \
+        --mysql-db="$SBDATABASE" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
+        --oltp-table-size="$SBLENGTH" \
+        prepare
+fi
+
+for SBTHREADS in 1 2 4 8 16 32
+do
+        sysbench \
+        --test=/usr/share/doc/sysbench/tests/db/$SBTEST.lua \
+        --mysql-db="$SBDB" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
+        --oltp-test-mode=complex --oltp-read-only=off --oltp-reconnect=on \
+        --max-time="$SBRUNTIME" \
+        --max-requests="1000000000" \
+        --num-threads="$SBTHREADS" \
+        --tx-rate="$SBTXRATE" \
+        run
+done > sysbench-out.txt
+
+awk -f sbtocsv.awk sysbench-out.txt > sysbench-out.csv
