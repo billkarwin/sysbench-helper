@@ -1,7 +1,7 @@
 :
 
 : ${CSVDATA:=sysbench-data}
-: ${SBLENGTH:=1000000000}
+: ${SBLENGTH:=100000000}
 : ${SBDATABASE:=sysbench}
 : ${SBTABLE:=sbtest2}
 : ${SBPARTITIONS:=1024}
