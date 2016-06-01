@@ -4,7 +4,7 @@
 : ${SBLENGTH:=100000000}
 : ${SBDATABASE:=sysbench}
 : ${SBTABLE:=sbtest2}
-: ${SBPARTITIONS:=1024}
+: ${SBPARTITIONS:=101}
 
 if [ ! -d $CSVDATA ] ; then
 	echo "Starting creating CSV files..."
@@ -16,17 +16,17 @@ if [ ! -d $CSVDATA ] ; then
 	find $CSVDATA -name "stdout" -execdir mv {} $SBTABLE \;
 fi
 
-mysqladmin create $SBDATABASE
+mysql -e "CREATE DATABASE IF NOT EXISTS $SBDATABASE DEFAULT CHARSET=utfmb4"
 mysql $SBDATABASE -e "DROP TABLE IF EXISTS $SBTABLE"
 mysql $SBDATABASE -e "CREATE TABLE $SBTABLE ( \
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, \
   k INT UNSIGNED NOT NULL, \
   c char(120) NOT NULL, \
-pad char(60) NOT NULL, KEY(k)) \
-ENGINE=InnoDB PARTITION BY HASH(id) PARTITIONS $SBPARTITIONS"
+pad char(60) NOT NULL, KEY(k) \
+) ENGINE=InnoDB \
+PARTITION BY HASH(id) PARTITIONS $SBPARTITIONS"
 
 echo "Starting loading CSV files..."
-cores=$((`parallel --number-of-cores` * 2))
-
-time mysqlimport --verbose --local --use-threads=$cores --fields-terminated-by="," $SBDATABASE $CSVDATA/1/*/$SBTABLE
+THREADS=$((`parallel --number-of-cores` * 2))
+time mysqlimport --verbose --local --use-threads=$THREADS --fields-terminated-by="," $SBDATABASE $CSVDATA/1/*/$SBTABLE
 echo "Done loading CSV files."
