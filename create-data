@@ -9,7 +9,7 @@
 if [ ! -d $CSVDATA ] ; then
 	echo "Starting creating CSV files..."
 	time seq 1 $SBPARTITIONS |
-	parallel --eta --progress --results $CSVDATA \
+	parallel --bibtex --eta --progress --results $CSVDATA \
 	  "awk -v CSVLENGTH=$SBLENGTH -v CSVOFFSET={} -v CSVPARTITIONS=$SBPARTITIONS -f create-data.awk" >/dev/null
 	echo "Done creating CSV files."
 
