@@ -1,32 +1,79 @@
 :
+# create-data
+# Copyright 2016 Karwin Software Solutions LLC
 
-: ${CSVDATA:=sysbench-data}
-: ${SBLENGTH:=100000000}
-: ${SBDATABASE:=sysbench}
-: ${SBTABLE:=sbtest2}
-: ${SBPARTITIONS:=101}
+database="sysbench"
+defaultsfile="$HOME/.my.cnf"
+outputdir="sysbench-data"
+partitions=101
+rows=1000000
+table="sbtest1"
+verbose=0
 
-if [ ! -d $CSVDATA ] ; then
-	echo "Starting creating CSV files..."
-	time seq 1 $SBPARTITIONS |
-	parallel --bibtex --eta --progress --results $CSVDATA \
-	  "awk -v CSVLENGTH=$SBLENGTH -v CSVOFFSET={} -v CSVPARTITIONS=$SBPARTITIONS -f create-data.awk" >/dev/null
-	echo "Done creating CSV files."
+options=`getopt d:f:o:s:t:v $*`
+if [ $? != 0 ]
+then
+	cat <<_USAGE_
+create-data - generate random data for Sysbench and load it quickly.
 
-	find $CSVDATA -name "stdout" -execdir mv {} $SBTABLE \;
+Usage:
+-d <database>	Name of database (default $database)
+-f <path>	MySQL options file (default $defaultsfile)
+-s <rows>	Size of the table in rows (default $rows)
+-o <path>	Output CSV data to directory (default $outputdir)
+-t <table>	Name of table (default $table)
+-v		Verbose output
+
+Note: the tables must be in file-per-table format.
+_USAGE_
+	exit 1
+fi
+eval set -- $options
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	-d) database="$2" ; shift ; shift ;;
+	-f) defaultsfile="$2" ; shift ; shift ;;
+	-o) outputdir="$2" ; shift ; shift ;;
+	-s) rows="$2" ; shift ; shift ;;
+	-t) table="$2" ; shift ; shift ;;
+	-v) verbose=1 ; shift ;;
+	--) shift ; break ;;
+	-*) usage ; exit 0 ;;
+	*) break ;;
+	esac
+done
+
+if [ -s "$defaultsfile" ]
+then
+	if [ -f "$defaultsfile" ]
+	then
+		defaults="--defaults-file=$defaultsfile"
+	fi
 fi
 
-mysql -e "CREATE DATABASE IF NOT EXISTS $SBDATABASE DEFAULT CHARSET=utfmb4"
-mysql $SBDATABASE -e "DROP TABLE IF EXISTS $SBTABLE"
-mysql $SBDATABASE -e "CREATE TABLE $SBTABLE ( \
+if [ ! -d $outputdir ] ; then
+	echo "Creating CSV files..."
+	time seq 1 $partitions |
+	parallel --will-cite --eta --progress --results $outputdir \
+	  "awk -v CSVLENGTH=$rows -v CSVOFFSET={} -v CSVPARTITIONS=$partitions -f create-data.awk" >/dev/null
+	echo "Done creating CSV files."
+
+	find $outputdir -name "stdout" -execdir mv {} $table \;
+fi
+
+echo "Creating database $database and table $table..."
+mysql -e "CREATE DATABASE IF NOT EXISTS $database DEFAULT CHARSET=utf8mb4"
+mysql $database -e "DROP TABLE IF EXISTS $table"
+mysql $database -e "CREATE TABLE $table ( \
   id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, \
   k INT UNSIGNED NOT NULL, \
   c char(120) NOT NULL, \
-pad char(60) NOT NULL, KEY(k) \
+  pad char(60) NOT NULL, KEY(k) \
 ) ENGINE=InnoDB \
-PARTITION BY HASH(id) PARTITIONS $SBPARTITIONS"
+PARTITION BY HASH(id) PARTITIONS $partitions"
 
-echo "Starting loading CSV files..."
-THREADS=$((`parallel --number-of-cores` * 2))
-time mysqlimport --verbose --local --use-threads=$THREADS --fields-terminated-by="," $SBDATABASE $CSVDATA/1/*/$SBTABLE
-echo "Done loading CSV files."
+echo "Loading CSV files..."
+time find $outputdir/1 -name $table |
+parallel --will-cite --eta --progress mysqlimport $defaults --silent --local --fields-terminated-by=, $database {}
+echo "Done!"
