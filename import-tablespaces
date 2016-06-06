@@ -134,7 +134,7 @@ then
 fi
 coproc { mysql -e "$flushsql ; system echo FLUSHED ; system sed /UNLOCK/q ; UNLOCK TABLES;" $sourcedatabase; }
 
-sed /FLUSHED/q <&${COPROC[0]}
+sed /FLUSHED/q <&${COPROC[0]} >/dev/null 2>&1
 
 if [ $verbose ]
 then
@@ -142,7 +142,7 @@ then
 fi
 
 cd $DATADIR/$destdatabase
-find $DATADIR$sourcedatabase -type f |
+time find $DATADIR$sourcedatabase -type f |
 parallel --will-cite --eta --progress rsync -a {} $DATADIR$destdatabase/
 
 if [ $verbose ]
