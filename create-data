@@ -5,7 +5,7 @@
 database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 outputdir="sysbench-data"
-partitions=101
+partitions=37
 rows=1000000
 table="sbtest1"
 verbose=0
