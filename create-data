@@ -5,7 +5,7 @@
 database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 outputdir="sysbench-data"
-partitions=37
+partitions=48
 rows=1000000
 table="sbtest1"
 verbose=0
@@ -75,5 +75,5 @@ PARTITION BY HASH(id) PARTITIONS $partitions"
 
 echo "Loading CSV files..."
 time find $outputdir/1 -name $table |
-parallel --will-cite --eta --progress mysqlimport $defaults --silent --local --fields-terminated-by=, $database {}
+parallel --will-cite -j 1 --eta --progress mysqlimport $defaults --silent --local --fields-terminated-by=, $database {}
 echo "Done!"
