@@ -56,7 +56,7 @@ if [ ! -d $outputdir ] ; then
 	echo "Creating CSV files..."
 	time seq 1 $partitions |
 	parallel --will-cite --eta --progress --results $outputdir \
-	  "awk -v CSVLENGTH=$rows -v CSVOFFSET={} -v CSVPARTITIONS=$partitions -f create-data.awk" >/dev/null
+	  "./create-data.py $rows {} $partitions" >/dev/null
 	echo "Done creating CSV files."
 
 	find $outputdir -name "stdout" -execdir mv {} $table \;
