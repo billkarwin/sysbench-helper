@@ -6,7 +6,7 @@ verbose=0
 sourcedatabase="sysbench"
 destdatabase="sysbenchtest"
 defaultsfile="$HOME/.my.cnf"
-threads=`parallel --will-cite --number-of-cores`
+cores=`grep -c '^processor' /proc/cpuinfo`
 
 options=`getopt b:s:d:D:f:v $*`
 if [ $? != 0 ]
@@ -38,18 +38,13 @@ do
 	esac
 done
 
-if [ -s "$defaultsfile" ]
-then 
-	if [ ! -f "$defaultsfile" ]
-	then
-		echo "ERROR: Cannot read defaults file $defaultsfile. Exiting." >&2
-		exit 1
-	fi
-	defaults="--defaults-file=$defaultsfile"
+if [ -f "$defaultsfile" ]
+then
+	defaults="--defaults-extra-file=$defaultsfile"
 fi
 
 DATADIR=`mysql "$defaults" -B -N -e "SELECT @@DATADIR"`
-INNODB_FILE_PER_TABLE=`mysql "$defaults" -B -N -e "SELECT @@INNODB_FILE_PER_TABLE"`
+INNODB_FILE_PER_TABLE=`mysql $defaults -B -N -e "SELECT @@INNODB_FILE_PER_TABLE"`
 VERSION=`mysql "$defaults" -B -N -e "SELECT @@VERSION"`
 
 if [ "$INNODB_FILE_PER_TABLE" != "1" -a "$INNODB_FILE_PER_TABLE" != "ON" ]
@@ -120,7 +115,7 @@ fi
 discardsql="SELECT CONCAT('ALTER TABLE $destdatabase.', table_name, ' DISCARD TABLESPACE;') FROM INFORMATION_SCHEMA.TABLES WHERE table_schema='$destdatabase' AND table_type='BASE TABLE';"
 
 mysql "$defaults" -B -N -e "$discardsql" |
-parallel --will-cite mysql "$defaults" -e "{}"
+xargs -n 1 -P $cores -I {} mysql $defaults -e "{}"
 
 makeflushsql="SELECT CONCAT('FLUSH TABLES ', GROUP_CONCAT(table_name), ' FOR EXPORT;') FROM INFORMATION_SCHEMA.TABLES WHERE table_schema='$destdatabase' AND table_type='BASE TABLE';"
 flushsql=`mysql "$defaults" -B -N -e "$makeflushsql"`
@@ -143,7 +138,7 @@ fi
 
 cd $DATADIR/$destdatabase
 time find $DATADIR$sourcedatabase -type f |
-parallel --will-cite --eta --progress rsync -a {} $DATADIR$destdatabase/
+xargs -n 1 -P $cores -I {} rsync -a {} $DATADIR$destdatabase/
 
 if [ $verbose ]
 then
@@ -157,8 +152,8 @@ then
 fi
 
 importsql="SELECT CONCAT('ALTER TABLE $destdatabase.', table_name, ' IMPORT TABLESPACE;') FROM INFORMATION_SCHEMA.TABLES WHERE table_schema='$destdatabase' and table_type='BASE TABLE';"
-mysql "$defaults" -B -N information_schema -e "$importsql" |
-parallel --will-cite mysql "$defaults" -e "{}"
+mysql $defaults -B -N information_schema -e "$importsql" |
+xargs -n 1 -P $cores -I {} mysql $defaults -e "{}"
 
 if [ $verbose ]
 then

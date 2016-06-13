@@ -6,11 +6,11 @@ database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 outputdir="sysbench-data"
 partitions=4
-partitionrows=$((1000000))
+partitionrows=10000
 start=1
 table="sbtest1"
 verbose=0
-cores=`parallel --number-of-cores`
+cores=`grep -c '^processor' /proc/cpuinfo`
 
 function usage
 {
@@ -18,7 +18,7 @@ function usage
 create-data - generate random data for Sysbench and load it quickly.
 
 Usage:
--c <cores>	Run N cores in parallel (default $cores)
+-c <cores>	Run N concurrent processes (default $cores)
 -d <database>	Name of database (default $database)
 -f <path>	MySQL options file (default $defaultsfile)
 -o <path>	Output CSV data to directory (default $outputdir)
@@ -47,7 +47,7 @@ done
 
 if [ -f "$defaultsfile" ]
 then
-	defaults="--defaults-file=$defaultsfile"
+	defaults="--defaults-extra-file=$defaultsfile"
 fi
 
 echo "Creating database $database and table $table..."
@@ -78,29 +78,23 @@ EOF
 ) | mysql $defaults $database
 
 echo "Creating CSV files..."
+mkdir -p $outputdir
 
 startpart=$start
 while [ $startpart -le $partitions ]
 do
-	rm -rf $outputdir
+	rm -rf $outputdir/*
 	endpart=$((startpart + $cores - 1))
 	endpart=$((endpart > partitions ? partitions : endpart))
 	echo "Generating data for partitions $startpart through $endpart..."
 	seq $startpart $endpart |
-	parallel --will-cite -j $cores --results $outputdir \
-	  "./create-data.py $partitionrows {}" >/dev/null
-
-	find $outputdir -name "stdout" | while read partfile
-	do
-		dir=`dirname $partfile`
-		part=`basename $dir`
-		mv $partfile $dir/${table}_$part
-	done
+	xargs -n 1 -P $cores -I {} \
+	  ./create-data.py $partitionrows {} $outputdir/${table}_{}
 
 	echo "Loading data for partitions $startpart through $endpart..."
-	find $outputdir/1 -name "${table}_*" |
-	parallel --will-cite -j $cores \
-	  "mysqlimport $defaults --local --fields-terminated-by=, $database {}"
+	find $outputdir -name "${table}_*" |
+	xargs -n 1 -P $cores -I {} \
+	  mysqlimport $defaults --local --fields-terminated-by=, $database {}
 	startpart=$((startpart + cores))
 done
 

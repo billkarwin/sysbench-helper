@@ -14,8 +14,13 @@ def main(args):
     return 1
   rows = int(args.pop(0))
   partition = int(args.pop(0))
+  outputfile = args.pop(0)
+  if outputfile:
+    outfd = open(outputfile, "w")
+  else:
+    outfd = sys.stdout
 
-  csvout = csv.writer(sys.stdout)
+  csvout = csv.writer(outfd)
   random.seed(8675309+partition)
   for i in xrange(rows * (partition-1) + 1, rows * partition):
     k = int(random.uniform(0, 1000000))

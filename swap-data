@@ -23,12 +23,12 @@ _USAGE_
 	exit 1
 }
 
-while getopts d:f:t:v opt
+while getopts d:f:p:t:v opt
 do
 	case $opt in
 	d) database="$OPTARG" ;;
 	f) defaultsfile="$OPTARG" ;;
-	p) partitions=10 ;;
+	p) partitions="$OPTARG" ;;
 	t) table="$OPTARG" ;;
 	v) verbose=1 ;;
 	\?) usage ; exit 0 ;;
@@ -39,10 +39,25 @@ shift $((OPTIND - 1))
 
 if [ -f "$defaultsfile" ]
 then
-	defaults="--defaults-file=$defaultsfile"
+	defaults="--defaults-extra-file=$defaultsfile"
 fi
 
-mysql $defaults -e "SELECT partition_ordinal_position, partition_name, table_rows FROM INFORMATION_SCHEMA.PARTITIONS WHERE table_schema='$database' AND table_name='$table' and partition_ordinal_position >= 2" | while read ordinal partition rows
+mysql $defaults -B -N -e "SELECT partition_ordinal_position-1, partition_name, table_rows FROM INFORMATION_SCHEMA.PARTITIONS WHERE table_schema='$database' AND table_name='$table' and partition_ordinal_position >= 2" | while read ordinal partition rows
 do
-	echo "$ordinal $partition: $rows"
+	exchangesql="ALTER TABLE ${table} EXCHANGE PARTITION p${ordinal} WITH TABLE ${table}_${ordinal};"
+	if [ $rows -eq 0 ]
+	then
+		if [ $ordinal -gt $partitions ]
+		then
+			break
+		fi
+		echo "Swapping in partition $partition, verifying data..."
+		mysql $defaults $database -e "$exchangesql"
+	else
+		if [ $ordinal -gt $partitions ]
+		then
+			echo "Swapping out partition $partition, verifying data..."
+			mysql $defaults $database -e "$exchangesql"
+		fi
+	fi
 done
