@@ -57,12 +57,16 @@ def main(args):
   if not args:
     print >>sys.stderr, "Need at least one file in argument"
     return 1
-  result = []
+  result = dict()
   for arg in args:
     with open(arg) as f:
       metric = {}
       parseFile(f, metric)
-      result.append(metric)
+      for m in metric:
+        if m[0] in result:
+          result[m[0]][arg] = m[1]
+        else:
+          result[m[0]] = {arg: m[1]}
 
   json.dump(result, sys.stdout, indent=2)
 

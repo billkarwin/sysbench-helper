@@ -5,75 +5,103 @@
 database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 outputdir="sysbench-data"
-partitions=48
-rows=1000000
+partitions=4
+partitionrows=$((1000000))
+start=1
 table="sbtest1"
 verbose=0
+cores=`parallel --number-of-cores`
 
-options=`getopt d:f:o:s:t:v $*`
-if [ $? != 0 ]
-then
+function usage
+{
 	cat <<_USAGE_
 create-data - generate random data for Sysbench and load it quickly.
 
 Usage:
+-c <cores>	Run N cores in parallel (default $cores)
 -d <database>	Name of database (default $database)
 -f <path>	MySQL options file (default $defaultsfile)
--s <rows>	Size of the table in rows (default $rows)
 -o <path>	Output CSV data to directory (default $outputdir)
+-p <partitions> Number of 10GB partitions to generate (default $partitions)
+-s <start>	Start at partition N (default $start)
 -t <table>	Name of table (default $table)
 -v		Verbose output
-
-Note: the tables must be in file-per-table format.
 _USAGE_
 	exit 1
-fi
-eval set -- $options
-while [ $# -gt 0 ]
+}
+
+while getopts c:d:f:o:p:t:v opt
 do
-	case "$1" in
-	-d) database="$2" ; shift ; shift ;;
-	-f) defaultsfile="$2" ; shift ; shift ;;
-	-o) outputdir="$2" ; shift ; shift ;;
-	-s) rows="$2" ; shift ; shift ;;
-	-t) table="$2" ; shift ; shift ;;
-	-v) verbose=1 ; shift ;;
-	--) shift ; break ;;
-	-*) usage ; exit 0 ;;
-	*) break ;;
+	case $opt in
+	c) cores="$OPTARG" ;;
+	d) database="$OPTARG" ;;
+	f) defaultsfile="$OPTARG" ;;
+	o) outputdir="$OPTARG" ;;
+	p) partitions="$OPTARG" ;;
+	s) start="$OPTARG" ;;
+	t) table="$OPTARG" ;;
+	v) verbose=1 ;;
+	\?) usage ; exit 0 ;;
 	esac
 done
 
-if [ -s "$defaultsfile" ]
+if [ -f "$defaultsfile" ]
 then
-	if [ -f "$defaultsfile" ]
-	then
-		defaults="--defaults-file=$defaultsfile"
-	fi
-fi
-
-if [ ! -d $outputdir ] ; then
-	echo "Creating CSV files..."
-	time seq 1 $partitions |
-	parallel --will-cite --eta --progress --results $outputdir \
-	  "./create-data.py $rows {} $partitions" >/dev/null
-	echo "Done creating CSV files."
-
-	find $outputdir -name "stdout" -execdir mv {} $table \;
+	defaults="--defaults-file=$defaultsfile"
 fi
 
 echo "Creating database $database and table $table..."
-mysql -e "CREATE DATABASE IF NOT EXISTS $database DEFAULT CHARSET=utf8mb4"
-mysql $database -e "DROP TABLE IF EXISTS $table"
-mysql $database -e "CREATE TABLE $table ( \
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, \
-  k INT UNSIGNED NOT NULL, \
-  c char(120) NOT NULL, \
-  pad char(60) NOT NULL, KEY(k) \
-) ENGINE=InnoDB \
-PARTITION BY HASH(id) PARTITIONS $partitions"
+mysqladmin $defaults -f drop $database
+mysqladmin $defaults create $database
+(
+	cat <<EOF
+	CREATE TABLE $table (
+	  id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+	  k INT UNSIGNED NOT NULL,
+	  c char(120) NOT NULL,
+	  pad TEXT NOT NULL,
+	  KEY(k)
+	) PARTITION BY RANGE(id) (
+EOF
+	for p in `seq 0 99`
+	do
+		echo "	  PARTITION p${p} VALUES LESS THAN (${p} * ${partitionrows}),"
+	done
+	cat <<EOF
+	  PARTITION pMAX VALUES LESS THAN (MAXVALUE)
+	);
+EOF
+	for p in `seq 1 99`
+	do
+		echo "CREATE TABLE ${table}_$p ( id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, k INT UNSIGNED NOT NULL, c char(120) NOT NULL, pad TEXT NOT NULL, KEY(k));"
+	done
+) | mysql $defaults $database
 
-echo "Loading CSV files..."
-time find $outputdir/1 -name $table |
-parallel --will-cite -j 1 --eta --progress mysqlimport $defaults --silent --local --fields-terminated-by=, $database {}
+echo "Creating CSV files..."
+
+startpart=$start
+while [ $startpart -le $partitions ]
+do
+	rm -rf $outputdir
+	endpart=$((startpart + $cores - 1))
+	endpart=$((endpart > partitions ? partitions : endpart))
+	echo "Generating data for partitions $startpart through $endpart..."
+	seq $startpart $endpart |
+	parallel --will-cite -j $cores --results $outputdir \
+	  "./create-data.py $partitionrows {}" >/dev/null
+
+	find $outputdir -name "stdout" | while read partfile
+	do
+		dir=`dirname $partfile`
+		part=`basename $dir`
+		mv $partfile $dir/${table}_$part
+	done
+
+	echo "Loading data for partitions $startpart through $endpart..."
+	find $outputdir/1 -name "${table}_*" |
+	parallel --will-cite -j $cores \
+	  "mysqlimport $defaults --local --fields-terminated-by=, $database {}"
+	startpart=$((startpart + cores))
+done
+
 echo "Done!"

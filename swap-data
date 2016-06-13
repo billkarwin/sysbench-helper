@@ -1,0 +1,48 @@
+:
+# swap-data
+# Copyright 2016 Karwin Software Solutions LLC
+
+database="sysbench"
+defaultsfile="$HOME/.my.cnf"
+partitions=10
+table="sbtest1"
+verbose=0
+
+function usage
+{
+	cat <<_USAGE_
+create-data - generate random data for Sysbench and load it quickly.
+
+Usage:
+-d <database>	Name of database (default $database)
+-f <path>	MySQL options file (default $defaultsfile)
+-p <partitions> Fill number of partitions (default 10)
+-t <table>	Name of table (default $table)
+-v		Verbose output
+_USAGE_
+	exit 1
+}
+
+while getopts d:f:t:v opt
+do
+	case $opt in
+	d) database="$OPTARG" ;;
+	f) defaultsfile="$OPTARG" ;;
+	p) partitions=10 ;;
+	t) table="$OPTARG" ;;
+	v) verbose=1 ;;
+	\?) usage ; exit 0 ;;
+	esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -f "$defaultsfile" ]
+then
+	defaults="--defaults-file=$defaultsfile"
+fi
+
+mysql $defaults -e "SELECT partition_ordinal_position, partition_name, table_rows FROM INFORMATION_SCHEMA.PARTITIONS WHERE table_schema='$database' AND table_name='$table' and partition_ordinal_position >= 2" | while read ordinal partition rows
+do
+	echo "$ordinal $partition: $rows"
+done
