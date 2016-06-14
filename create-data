@@ -22,7 +22,8 @@ Usage:
 -d <database>	Name of database (default $database)
 -f <path>	MySQL options file (default $defaultsfile)
 -o <path>	Output CSV data to directory (default $outputdir)
--p <partitions> Number of 10GB partitions to generate (default $partitions)
+-p <partitions> Number of partitions to generate (default $partitions)
+-r <rows>	Number of rows per partition (default $partitionrows)
 -s <start>	Start at partition N (default $start)
 -t <table>	Name of table (default $table)
 -v		Verbose output
@@ -38,6 +39,7 @@ do
 	f) defaultsfile="$OPTARG" ;;
 	o) outputdir="$OPTARG" ;;
 	p) partitions="$OPTARG" ;;
+	r) partitionrows="$OPTARG" ;;
 	s) start="$OPTARG" ;;
 	t) table="$OPTARG" ;;
 	v) verbose=1 ;;
