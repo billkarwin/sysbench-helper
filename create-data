@@ -31,7 +31,7 @@ _USAGE_
 	exit 1
 }
 
-while getopts c:d:f:o:p:t:v opt
+while getopts c:d:f:o:p:r:s:t:v opt
 do
 	case $opt in
 	c) cores="$OPTARG" ;;
