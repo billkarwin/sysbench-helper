@@ -66,7 +66,7 @@ do
         sysbench \
         --test=/usr/share/doc/sysbench/tests/db/oltp.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
-        --oltp-test-mode=complex --oltp-read-only=off --oltp-reconnect=on \
+        --oltp-test-mode=complex --oltp-read-only=on --oltp-reconnect=on \
         --max-time="$runtime" \
         --max-requests="1000000000" \
         --num-threads="$threads" \
