@@ -65,7 +65,7 @@ mysqladmin $defaults create $database
 	  KEY(k)
 	) PARTITION BY RANGE(id) (
 EOF
-	for p in `seq 0 99`
+	for p in `seq 0 $partitions`
 	do
 		echo "	  PARTITION p${p} VALUES LESS THAN (${p} * ${partitionrows}),"
 	done
@@ -73,7 +73,7 @@ EOF
 	  PARTITION pMAX VALUES LESS THAN (MAXVALUE)
 	);
 EOF
-	for p in `seq 1 99`
+	for p in `seq 1 $partitions`
 	do
 		echo "CREATE TABLE ${table}_$p ( id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, k INT UNSIGNED NOT NULL, c char(120) NOT NULL, pad TEXT NOT NULL, KEY(k));"
 	done
