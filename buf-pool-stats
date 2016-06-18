@@ -1,0 +1,66 @@
+:
+# buf-pool
+# Copyright 2016 Karwin Software Solutions LLC
+
+database="sysbench"
+defaultsfile="$HOME/.my.cnf"
+table="sbtest1"
+verbose=0
+
+function usage
+{
+	cat <<_USAGE_
+create-data - generate random data for Sysbench and load it quickly.
+
+Usage:
+-d <database>	Name of database (default $database)
+-f <path>	MySQL options file (default $defaultsfile)
+-t <table>	Name of table (default $table)
+-v		Verbose output
+_USAGE_
+	exit 1
+}
+
+while getopts d:f:t:v opt
+do
+	case $opt in
+	d) database="$OPTARG" ;;
+	f) defaultsfile="$OPTARG" ;;
+	t) table="$OPTARG" ;;
+	v) verbose=1 ;;
+	\?) usage ; exit 0 ;;
+	esac
+done
+
+if [ -f "$defaultsfile" ]
+then
+	defaults="--defaults-extra-file=$defaultsfile"
+fi
+
+cat <<_SQL_ | mysql --table $defaults information_schema
+SET @page_size = @@innodb_page_size;
+SET @bp_pages = @@innodb_buffer_pool_size/@page_size;
+
+SELECT TS.TABLE_SCHEMA, TS.TABLE_NAME, X.INDEX_NAME,
+CASE WHEN X.INDEX_NAME IS NULL THEN NULL
+     WHEN X.TABLE_SCHEMA_split LIKE 'SYS\\_%' THEN X.INDEX_NAME 
+     WHEN X.INDEX_NAME IN ('PRIMARY', 'GEN_CLUST_INDEX') THEN 'PRIMARY' 
+     ELSE 'SECONDARY' END AS INDEX_TYPE,
+ROUND(100*X.PAGES/@bp_pages,2) AS PCT_OF_BUFFER_POOL,
+ROUND(100*X.PAGES /
+	CASE WHEN X.INDEX_NAME IS NULL THEN NULL
+	     WHEN X.TABLE_SCHEMA_split LIKE 'SYS\\_%' THEN NULL
+	     WHEN X.INDEX_NAME IN ('PRIMARY', 'GEN_CLUST_INDEX') THEN TS.DATA_LENGTH
+	     ELSE TS.INDEX_LENGTH END / @page_size, 2) AS PCT_OF_INDEX
+FROM (
+	SELECT SUBSTRING_INDEX(SUBSTRING_INDEX(P.TABLE_NAME, '\`', 2), '\`', -1) AS TABLE_SCHEMA_split,
+		SUBSTRING_INDEX(SUBSTRING_INDEX(P.TABLE_NAME, '\`', 4), '\`', -1) AS TABLE_NAME_split, 
+		P.PAGE_TYPE, P.INDEX_NAME,
+	COUNT(DISTINCT P.PAGE_NUMBER) AS PAGES
+	FROM INNODB_BUFFER_PAGE AS P
+	GROUP BY TABLE_SCHEMA_split, TABLE_NAME_split, PAGE_TYPE, INDEX_NAME
+) AS X
+JOIN TABLES AS TS ON (TS.TABLE_SCHEMA=X.TABLE_SCHEMA_split AND TS.TABLE_NAME=X.TABLE_NAME_split)
+WHERE TS.TABLE_SCHEMA='$database'
+ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_TYPE, INDEX_NAME
+_SQL_
