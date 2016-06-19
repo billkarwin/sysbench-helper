@@ -37,7 +37,7 @@ then
 	defaults="--defaults-extra-file=$defaultsfile"
 fi
 
-cat <<_SQL_ | mysql --table $defaults information_schema
+cat <<_SQL_ | mysql $defaults --table information_schema
 SET @page_size = @@innodb_page_size;
 SET @bp_pages = @@innodb_buffer_pool_size/@page_size;
 
