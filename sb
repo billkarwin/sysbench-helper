@@ -8,70 +8,95 @@
 database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 name="benchmark-results"
-outputdir="sysbench-tools-master"
+outputdir="results"
 runtime="600"
-rows="1000000"
+rows="0"
 table="sbtest1"
 verbose=0
+threads_choices="32 64 96 128"
 
-options=`getopt d:f:n:o:r:s:t:v $*`
-if [ $? != 0 ]
-then
+function usage()
+{
 	cat <<_USAGE_
-create-data - generate random data for Sysbench and load it quickly.
-
+sb - wrapper to invoke sysbench
 Usage:
--d <database>	Name of database (default $database)
--f <path>	MySQL options file (default $defaultsfile)
--n <name>	Name the test (default $name)
--o <path>	Output results to directory (default $outputdir)
--r <seconds>	Run test for specified number of seconds (default $runtime)
--s <rows>	Size of the table in rows (default $rows)
--t <table>	Name of table (default $table)
--v		Verbose output
+-d <database>		Database containing benchmark data (default: $database)
+-f <defaultsfile>	MySQL option defaults file (default: $defaultsfile)
+-n <name>		Name of test run (default: $name)
+-o <outputdir>		Directory to save results (default: $outputdir)
+-r <runtime>		Number of seconds to run each test (default: $runtime)
+-s <rows>		Number of rows in table to scan (default: size of table)
+-t <table>		Table in benchmark database (default: $table)
+-T "<threads>"		Space-separated list of thread counts (default: $threads_choices)
+-v			Verbose output
 _USAGE_
-	exit 1
-fi
-eval set -- $options
-while [ $# -gt 0 ]
+}
+
+while getopts d:f:n:o:r:s:t:T:v opt
 do
-	case "$1" in
-	-d) database="$2" ; shift ; shift ;;
-	-f) defaultsfile="$2" ; shift ; shift ;;
-	-n) name="$2" ; shift ; shift ;;
-	-o) outputdir="$2" ; shift ; shift ;;
-	-r) runtime="$2" ; shift ; shift ;;
-	-s) rows="$2" ; shift ; shift ;;
-	-t) table="$2" ; shift ; shift ;;
-	-v) verbose=1 ; shift ;;
-	--) shift ; break ;;
-	-*) usage ; exit 0 ;;
-	*) break ;;
+	case $opt in
+	d) database="$OPTARG" ;;
+	f) defaultsfile="$OPTARG" ;;
+	n) name="$OPTARG" ;;
+	o) outputdir="$OPTARG" ;;
+	r) runtime="$OPTARG" ;;
+	s) rows="$OPTARG" ;;
+	t) table="$OPTARG" ;;
+	T) threads_choices="$OPTARG" ;;
+	v) verbose=1 ;;
+	\?) usage ; exit 0 ;;
 	esac
 done
+shift $((OPTIND - 1))
 
 if [ -s "$defaultsfile" ]
 then
 	if [ -f "$defaultsfile" ]
 	then
-		defaults="--defaults-file=$defaultsfile"
+		if [ $verbose ]
+		then
+			echo "Using defaults file $defaultsfile"
+		fi
+		defaults="--defaults-extra-file=$defaultsfile"
 	fi
+fi
+
+if [ $verbose ]
+then
+	echo "Running benchmark with various threads ($threads_choices), output in $outputdir/$name"
+fi
+
+if [ "$rows" -eq 0 ]
+then
+	rows=`mysql $defaults -B -N -e "SELECT table_rows FROM information_schema.tables WHERE table_schema='$database' AND table_name='$table'"`
+	if [ $verbose ]
+	then
+		echo "Querying on full table with approximately $rows rows"
+	fi
+else
+	echo "Querying $rows rows"
 fi
 
 mkdir -p results/$name
 
-for threads in 24 48 96 192
+for threads in $threads_choices
 do
 	echo "Running test for $runtime seconds with $threads threads..."
         sysbench \
         --test=/usr/share/doc/sysbench/tests/db/oltp.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
-        --oltp-test-mode=complex --oltp-read-only=on --oltp-reconnect=on \
+	--oltp-read-only=on \
+	--oltp-table-size=$rows \
+        --oltp-test-mode=complex \
         --max-time="$runtime" \
-        --max-requests="1000000000" \
+        --max-requests="0" \
         --num-threads="$threads" \
-        --tx-rate="500" \
-        run > results/$name/oltp-$rows-$threads.log
+        --tx-rate="0" \
+        run > $outputdir/$name/oltp-$threads.log
 done
 
-./sb2json.py results/$name/oltp-$rows-*.log > results/$name/oltp-$rows.json
+if [ $verbose ]
+then
+	echo "Parsing sysbench output into JSON"
+fi
+./sb2json.py $outputdir/$name/oltp-*.log > $outputdir/$name/oltp.json
