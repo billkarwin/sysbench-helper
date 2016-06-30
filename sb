@@ -85,7 +85,7 @@ for threads in $threads_choices
 do
 	echo "Running test for $runtime seconds with $threads threads..."
         sysbench \
-        --test=../sysbench-olap/sysbench/tests/db/olap.lua \
+        --test=olap.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
 	--olap-table-size=$rows \
 	--olap-simple-indexed-ranges=1 \
