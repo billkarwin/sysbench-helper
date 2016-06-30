@@ -1,5 +1,5 @@
 :
-# runsysbench
+# sb - run sysbench with options
 # Copyright 2016 Karwin Software Solutions LLC
 
 : ${SBUSER:="root"}
@@ -9,9 +9,10 @@ database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 name="benchmark-results"
 outputdir="results"
+prepare=0
 runtime="600"
 rows="0"
-table="sbtest1"
+table="olaptest1"
 verbose=0
 threads_choices="32 64 96 128"
 
@@ -38,6 +39,7 @@ do
 	d) database="$OPTARG" ;;
 	f) defaultsfile="$OPTARG" ;;
 	n) name="$OPTARG" ;;
+	p) prepare=1 ;;
 	o) outputdir="$OPTARG" ;;
 	r) runtime="$OPTARG" ;;
 	s) rows="$OPTARG" ;;
@@ -83,11 +85,13 @@ for threads in $threads_choices
 do
 	echo "Running test for $runtime seconds with $threads threads..."
         sysbench \
-        --test=/usr/share/doc/sysbench/tests/db/oltp.lua \
+        --test=../sysbench-olap/sysbench/tests/db/olap.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
-	--oltp-read-only=on \
-	--oltp-table-size=$rows \
-        --oltp-test-mode=complex \
+	--olap-table-size=$rows \
+	--olap-simple-indexed-ranges=1 \
+	--olap-simple-unindexed-ranges=1 \
+	--olap-count-indexed-ranges=2 \
+	--olap-count-unindexed-ranges=2 \
         --max-time="$runtime" \
         --max-requests="0" \
         --num-threads="$threads" \

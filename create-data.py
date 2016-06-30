@@ -23,16 +23,16 @@ def main(args):
   csvout = csv.writer(outfd)
   random.seed(8675309+partition)
   for i in xrange(rows * (partition-1) + 1, rows * partition):
-    k = int(random.uniform(0, 1000000))
-    c = set()
-    while len(c) < 10:
-      c.add('%011d' % random.randint(0, 99999999999))
-    cstr = '-'.join(c)
-    pad = set()
-    while len(pad) < 1000:
-      pad.add('%011d' % random.randint(0, 99999999999))
-    padstr = '-'.join(pad)
-    csvout.writerow([i,k,cstr,padstr])
+    fields = [i] * 34
+    fields[1] = int(random.uniform(0, rows))
+    fields[2] = int(random.uniform(0, rows))
+    fields[3] = int(random.uniform(0, rows))
+    for j in xrange(4,34):
+      c = set()
+      while len(c) < 20:
+        c.add('%011d' % random.randint(0, 99999999999))
+      fields[j] = '-'.join(c)
+    csvout.writerow(fields)
     
 if __name__ == "__main__":
   sys.exit(main(sys.argv))
