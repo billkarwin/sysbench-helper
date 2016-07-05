@@ -8,6 +8,7 @@
 database="sysbench"
 defaultsfile="$HOME/.my.cnf"
 name="benchmark-results"
+test="olap"
 outputdir="results"
 prepare=0
 runtime="600"
@@ -85,7 +86,7 @@ for threads in $threads_choices
 do
 	echo "Running test for $runtime seconds with $threads threads..."
         sysbench \
-        --test=olap.lua \
+        --test=${test}.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
 	--olap-table-size=$rows \
 	--olap-simple-indexed-ranges=1 \
@@ -96,11 +97,11 @@ do
         --max-requests="0" \
         --num-threads="$threads" \
         --tx-rate="0" \
-        run > $outputdir/$name/oltp-$threads.log
+        run > $outputdir/$name/${test}-$threads.log
 done
 
 if [ $verbose ]
 then
 	echo "Parsing sysbench output into JSON"
 fi
-./sb2json.py $outputdir/$name/oltp-*.log > $outputdir/$name/oltp.json
+./sb2json.py $outputdir/$name/${test}-*.log > $outputdir/$name/${test}.json
