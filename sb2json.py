@@ -6,6 +6,7 @@
 import json
 import re
 import sys
+import os.path
 
 def parseFile(f, metric):
   for line in f:
@@ -35,7 +36,8 @@ def parseFile(f, metric):
   metric["reconnects"], metric["reconnects/sec"] = r.split( metric["reconnects"])[0:2]
 
   r = re.compile('[^\d.-]+')
-  metric["Target transaction rate"] = r.split(metric["Target transaction rate"])[0]
+  if "Target transaction rate" in metric:
+    metric["Target transaction rate"] = r.split(metric["Target transaction rate"])[0]
   metric["total time"] = r.split(metric["total time"])[0]
   metric["total time taken by event execution"] = r.split(metric["total time taken by event execution"])[0]
   metric["response min"] = r.split(metric["min"])[0]
@@ -59,14 +61,11 @@ def main(args):
     return 1
   result = dict()
   for arg in args:
+    testrun = os.path.basename(arg)
     with open(arg) as f:
       metric = {}
       parseFile(f, metric)
-      for m in metric:
-        if m[0] in result:
-          result[m[0]][arg] = m[1]
-        else:
-          result[m[0]] = {arg: m[1]}
+      result[testrun] = metric
 
   json.dump(result, sys.stdout, indent=2)
 
