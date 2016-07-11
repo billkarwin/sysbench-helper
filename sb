@@ -25,6 +25,7 @@ Usage:
 -f <defaultsfile>	MySQL option defaults file (default: $defaultsfile)
 -n <name>		Name of test run (default: $name)
 -o <outputdir>		Directory to save results (default: $outputdir)
+-p			Prepare data (default: 0)
 -r <runtime>		Number of seconds to run each test (default: $runtime)
 -s <rows>		Number of rows in table to scan (default: size of table)
 -t <table>		Table in benchmark database (default: $table)
@@ -33,7 +34,7 @@ Usage:
 _USAGE_
 }
 
-while getopts d:f:n:o:r:s:t:T:v opt
+while getopts d:f:n:o:pr:s:t:T:v opt
 do
 	case $opt in
 	d) database="$OPTARG" ;;
@@ -55,7 +56,7 @@ if [ -s "$defaultsfile" ]
 then
 	if [ -f "$defaultsfile" ]
 	then
-		if [ $verbose ]
+		if [ $verbose = 1 ]
 		then
 			echo "Using defaults file $defaultsfile"
 		fi
@@ -63,17 +64,33 @@ then
 	fi
 fi
 
-if [ $verbose ]
+if [ $prepare = 1 ]
+then
+	if [ $verbose = 1 ]
+	then
+		echo "Preparing data for $rows rows"
+	fi
+	sysbench \
+	--test=olap.lua \
+        --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
+	--olap-table-size=$rows \
+	--olap-verbose=1 \
+	prepare
+	exit 0
+fi
+
+
+if [ $verbose = 1 ]
 then
 	echo "Running benchmark with various threads ($threads_choices), output in $outputdir/$name"
 fi
 
 if [ "$rows" -eq 0 ]
 then
-	rows=`mysql $defaults -B -N -e "SELECT table_rows FROM information_schema.tables WHERE table_schema='$database' AND table_name='$table'"`
-	if [ $verbose ]
+	rows=`mysql $defaults -B -N -e "SELECT COUNT(*) FROM $database.$table"`
+	if [ $verbose = 1 ]
 	then
-		echo "Querying on full table with approximately $rows rows"
+		echo "Querying on full table with $rows rows"
 	fi
 else
 	echo "Querying $rows rows"
@@ -88,19 +105,19 @@ do
         --test=olap.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
 	--olap-table-size=$rows \
-	--olap-simple-indexed-ranges=1 \
-	--olap-simple-unindexed-ranges=1 \
+	--olap-simple-indexed-ranges=0 \
+	--olap-simple-unindexed-ranges=0 \
 	--olap-count-indexed-ranges=2 \
 	--olap-count-unindexed-ranges=2 \
         --max-time="$runtime" \
         --max-requests="0" \
         --num-threads="$threads" \
         --tx-rate="0" \
-        run > $outputdir/$name/oltp-$threads.log
+        run > $outputdir/$name/olap-$threads.log
 done
 
-if [ $verbose ]
+if [ $verbose = 1 ]
 then
 	echo "Parsing sysbench output into JSON"
 fi
-./sb2json.py $outputdir/$name/oltp-*.log > $outputdir/$name/oltp.json
+./sb2json.py $outputdir/$name/olap-*.log > $outputdir/$name/olap.json
