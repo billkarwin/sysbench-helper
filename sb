@@ -110,6 +110,7 @@ do
 	--olap-simple-unindexed-ranges=0 \
 	--olap-count-indexed-ranges=2 \
 	--olap-count-unindexed-ranges=2 \
+	--olap-sample-type=tiled \
         --max-time="$runtime" \
         --max-requests="0" \
         --num-threads="$threads" \
