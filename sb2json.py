@@ -18,6 +18,7 @@ def parseFile(f, metric):
     if value.strip() == "":
       continue
     metric[name.strip()] = value.strip()
+  json.dump(metric, sys.stdout, indent=2)
 
   metric["queries read"] = metric["read"] 
   metric["queries write"] = metric["write"] 

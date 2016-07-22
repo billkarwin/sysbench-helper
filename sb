@@ -16,6 +16,7 @@ rows="0"
 table="olaptest1"
 verbose=0
 threads_choices="32 64 96 128"
+rand_seed=8675309
 
 function usage()
 {
@@ -29,6 +30,7 @@ Usage:
 -p			Prepare data (default: 0)
 -r <runtime>		Number of seconds to run each test (default: $runtime)
 -s <rows>		Number of rows in table to scan (default: size of table)
+-S <seed>		Random number seed for data generation (default: $rand_seed)
 -t <table>		Table in benchmark database (default: $table)
 -T "<threads>"		Space-separated list of thread counts (default: $threads_choices)
 -v			Verbose output
@@ -74,6 +76,7 @@ then
 	sysbench \
 	--test=${test}.lua \
         --mysql-db="$database" --mysql-user="$SBUSER" --mysql-password="$SBPASSWORD" \
+	--rand-seed=$rand_seed \
 	--olap-table-size=$rows \
 	--olap-verbose=1 \
 	prepare
